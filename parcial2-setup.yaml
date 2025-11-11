@@ -1,0 +1,149 @@
+#Se redirige el trafico con kubectl port-forward -n parcial2 deployment/fastapi-app 8333:8333
+#Desde otra terminal se puede probar con curl http://localhost:8333/health, curl http://localhost:8333/users y todo lo demas usando la API
+#Aqui creamos el namespace para nuestro parcial
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: parcial2
+---
+# ConfigMap para las variables de entorno de Postgres
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-config
+  namespace: parcial2
+data:
+  POSTGRES_DB: users_db
+  POSTGRES_USER: postgres
+  POSTGRES_PASSWORD: secret
+---
+# PersistentVolumeClaim para Postgres, asi se puede eliminar el pod sin perder la informacion
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: parcial2
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+# Deployment de la DB Postgres
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: parcial2
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - name: postgres
+        image: deibymp/postgres-parcial2:1.0
+        ports:
+        - containerPort: 5432
+        env:
+        - name: POSTGRES_DB
+          valueFrom:
+            configMapKeyRef:
+              name: postgres-config
+              key: POSTGRES_DB
+        - name: POSTGRES_USER
+          valueFrom:
+            configMapKeyRef:
+              name: postgres-config
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            configMapKeyRef:
+              name: postgres-config
+              key: POSTGRES_PASSWORD
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+      volumes:
+      - name: postgres-storage
+        persistentVolumeClaim:
+          claimName: postgres-pvc
+---
+# Service para DB Postgres
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-service
+  namespace: parcial2
+spec:
+  selector:
+    app: postgres
+  ports:
+  - port: 5432
+    targetPort: 5432
+  type: ClusterIP
+---
+# Deployment de la aplicacion FastAPI
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fastapi-app
+  namespace: parcial2
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fastapi-app
+  template:
+    metadata:
+      labels:
+        app: fastapi-app
+    spec:
+      containers:
+      - name: fastapi-app
+        image: deibymp/fastapi-app
+        ports:
+        - containerPort: 8333
+        env:
+        - name: DB_HOST
+          value: "postgres-service"
+        - name: DB_PORT
+          value: "5432"
+        - name: DB_USER
+          valueFrom:
+            configMapKeyRef:
+              name: postgres-config
+              key: POSTGRES_USER
+        - name: DB_PASSWORD
+          valueFrom:
+            configMapKeyRef:
+              name: postgres-config
+              key: POSTGRES_PASSWORD
+        - name: DB_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: postgres-config
+              key: POSTGRES_DB
+        - name: DATABASE_URL
+          value: "postgresql://postgres:secret@postgres-service:5432/users_db"
+---
+# Service para la aplicacion FastAPI
+apiVersion: v1
+kind: Service
+metadata:
+  name: fastapi-service
+  namespace: parcial2
+spec:
+  selector:
+    app: fastapi-app
+  ports:
+  - port: 8333
+    targetPort: 8333
+    nodePort: 30083
+  type: NodePort

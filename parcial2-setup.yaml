@@ -1,5 +1,15 @@
-#Se redirige el trafico con kubectl port-forward -n parcial2 deployment/fastapi-app 8333:8333
+#################################################################################################################################################
+#Primero aplicamos el archivo con kubectl apply -f parcial2-setup.yaml
+
+#Luego se puede verificar que los pods esten corriendo con kubectl get pods -n parcial2
+
+#Tambien podemos usar kubectl get all -n parcial2 para ver todos los recursos en el namespace parcial2
+
+#Luego redirigimos el trafico con kubectl port-forward -n parcial2 deployment/fastapi-app 8333:8333
+
 #Desde otra terminal se puede probar con curl http://localhost:8333/health, curl http://localhost:8333/users y todo lo demas usando la API
+
+#################################################################################################################################################
 #Aqui creamos el namespace para nuestro parcial
 apiVersion: v1
 kind: Namespace
